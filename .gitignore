@@ -2,3 +2,6 @@ dictionaries/
 input.txt
 output.txt
 prompt-testing/
+.DS_Store
+.env
+漢語水平考試+粵語練習*.txt

@@ -3,9 +3,13 @@ from vertexai.preview.generative_models import GenerativeModel, Tool, SafetySett
 import vertexai
 import logging
 import os
+from dotenv import load_dotenv
 
-# Initialize Vertex AI API once per session
-PROJECT_ID = "<redacted>"
+# Load environment variables
+load_dotenv()
+
+# Use environment variables instead of hardcoded values
+PROJECT_ID = os.getenv('VERTEX_PROJECT_ID')
 LOCATION = "us-central1"
 
 # Set up logging
