@@ -1,3 +1,6 @@
+import os
+from pathlib import Path
+from dotenv import load_dotenv
 from vertexai.preview import rag
 import vertexai
 import logging
@@ -7,13 +10,37 @@ from google.api_core import exceptions
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Project details
-PROJECT_ID = "<redacted>"  # Replace with your actual project ID if different
-LOCATION = "us-central1"
+def load_env():
+    """Load environment variables from .env file in parent directory"""
+    # Get the parent directory of the current script
+    parent_dir = Path(__file__).parent.parent
+    env_path = parent_dir / '.env'
+    
+    # Load the .env file
+    if not load_dotenv(env_path):
+        raise EnvironmentError(f"Could not load .env file at {env_path}")
+    
+    # Get PROJECT_ID from environment variables
+    project_id = os.getenv('PROJECT_ID')
+    if not project_id:
+        raise EnvironmentError("PROJECT_ID not found in .env file")
+    
+    return project_id
 
 def delete_all_corpora():
+    # Get project ID from .env
+    try:
+        project_id = load_env()
+        logger.info(f"Loaded PROJECT_ID from .env")
+    except EnvironmentError as e:
+        logger.error(f"Environment error: {e}")
+        return
+
+    # Location constant
+    LOCATION = "us-central1"
+
     # Initialize Vertex AI
-    vertexai.init(project=PROJECT_ID, location=LOCATION)
+    vertexai.init(project=project_id, location=LOCATION)
 
     try:
         # List all corpora

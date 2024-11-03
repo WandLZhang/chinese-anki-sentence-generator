@@ -5,3 +5,5 @@ prompt-testing/
 .DS_Store
 .env
 漢語水平考試+粵語練習*.txt
+dictionary_entries/
+rag/upload_progress.json

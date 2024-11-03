@@ -103,23 +103,29 @@ def generate_cantonese_sentence(rag_model, vocabulary_word):
 
     Guidelines:
     - Do not repeat the prompt input in your response.
-    - Refer to wordshk-dictionary.csv and check the following: 
-    a. if the word doesn't have an entry, don't generate a sentence and return nothing
-    b. if the word has (label:書面語), do NOT generate a sentence using the input vocabulary word but INSTEAD use a the synonym in (sim:) OR use the yue sentence in the <eg> example sentences OR a similar word in the <yue> dictionary definition.
+    - Refer to the retrieved entry from wordshk-dictionary: 
+    
+    and check the following: 
+    a. if the word doesn't have an entry, i.e., doesn't have an integer and pronunciation and "pos:", e.g., "1662,躍躍欲試:joek3 joek3 juk6 si3,"(pos:語句)", don't generate a sentence and return nothing
+    b. if the word has (label:書面語), do NOT generate a sentence using the input vocabulary word but INSTEAD use the synonym ("sim: <synonym>") OR use the yue sentence in the <eg> example sentences OR a similar word in the "yue:" dictionary definition.
     c. If the word has an entry, use the traditional script.
 
     Examples:
     Prompt: 出路
     Output: 而家嘅大學生都好擔心自己嘅出路。
+    Explanation: confirmed entry in the dictionary
     
     Prompt: 應聘
-    Output: 呢間公司出嘅條件咁吸引，實有好多人去應徵。
+    Output: <nothing>。
+    Explanation: word ntry is not in dictionary
     
     Prompt: 娛樂
     Output: 我識鬼文學咩？娛樂就識啫。
+    Explanation: confirmed entry in the dictionary
 
     Prompt: 責備
     Output: 做錯嘢畀老師鬧。
+    Explanation: it is label:書面語 and so use the "sim: <synonym>" or "yue:" dictionary definition
     """
 
     prompt = f"{system_instruction}\n\nInput: {vocabulary_word}"
