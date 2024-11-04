@@ -171,9 +171,14 @@ def upload_file_batch(args):
 def create_corpus(display_name):
     """Create a new RAG corpus."""
     try:
+        embedding_model_config = rag.EmbeddingModelConfig(
+            publisher_model="publishers/google/models/text-multilingual-embedding-002"
+        )
+        
         corpus = rag.create_corpus(
             display_name=display_name,
-            description="Cantonese dictionary entries from Words.hk"
+            description="Cantonese dictionary entries from Words.hk",
+            embedding_model_config=embedding_model_config,
         )
         logger.info(f"Created new corpus: {corpus.name}")
         return corpus
@@ -219,8 +224,8 @@ def upload_dictionary_entries():
         # Load progress and get existing entries
         uploaded_entries = load_progress()
         logger.info("Getting list of existing entries (this may take a while due to rate limiting)...")
-        # existing_entries = get_existing_entries(existing_corpus.name) # uncomment if I need to have the RAG source of truth of corpus files
-        # uploaded_entries.update(existing_entries)                     # uncomment if I need to have the RAG source of truth of corpus files
+        existing_entries = get_existing_entries(existing_corpus.name) # uncomment if I need to have the RAG source of truth of corpus files
+        uploaded_entries.update(existing_entries)                     # uncomment if I need to have the RAG source of truth of corpus files
         logger.info(f"Found {len(uploaded_entries)} already uploaded entries")
 
         # Get list of all entry files and prepare upload information

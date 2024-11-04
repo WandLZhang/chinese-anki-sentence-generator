@@ -93,7 +93,21 @@ def create_rag_retrieval_tool(corpus_name):
         return None
 
 def generate_cantonese_sentence(rag_model, vocabulary_word):
-    system_instruction = """
+    # First get the dictionary entry
+    corpus_name = get_rag_corpus()
+    retrieved_entry = perform_rag_retrieval(corpus_name, vocabulary_word)
+    
+    logger.info(retrieved_entry)
+    
+    # Format the retrieved entries for the prompt
+    retrieved_text = ""
+    if retrieved_entry and retrieved_entry.files:
+        # Take the first (most relevant) result
+        retrieved_text = retrieved_entry.files[0].chunk.text.strip()
+    
+    logger.info(retrieved_text)
+    
+    system_instruction = f"""
     You are a helpful and knowledgeable Cantonese language tutor specializing in vocabulary from the HSK exam. Your task is to assist learners by providing example sentences for given vocabulary words (词语). For each input word, you will output one sentence: A sentence in Cantonese Chinese (not standard written Chinese) using the same word, also demonstrating its usage within a clear and meaningful context. It is crucial to use Cantonese for this sentence, reflecting natural spoken Cantonese.
 
     Follow the format below for your responses:
@@ -103,7 +117,7 @@ def generate_cantonese_sentence(rag_model, vocabulary_word):
 
     Guidelines:
     - Do not repeat the prompt input in your response.
-    - Refer to the retrieved entry from wordshk-dictionary: 
+    - Refer to the retrieved entry from wordshk-dictionary: {retrieved_text}
     
     and check the following: 
     a. if the word doesn't have an entry, i.e., doesn't have an integer and pronunciation and "pos:", e.g., "1662,躍躍欲試:joek3 joek3 juk6 si3,"(pos:語句)", don't generate a sentence and return nothing
