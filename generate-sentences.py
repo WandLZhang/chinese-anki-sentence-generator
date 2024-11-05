@@ -97,15 +97,15 @@ def generate_cantonese_sentence(rag_model, vocabulary_word):
     corpus_name = get_rag_corpus()
     retrieved_entry = perform_rag_retrieval(corpus_name, vocabulary_word)
     
-    logger.info(retrieved_entry)
+    # logger.info(f"contexts {retrieved_entry}")
     
     # Format the retrieved entries for the prompt
     retrieved_text = ""
-    if retrieved_entry and retrieved_entry.files:
+    if retrieved_entry and retrieved_entry.contexts.contexts:
         # Take the first (most relevant) result
-        retrieved_text = retrieved_entry.files[0].chunk.text.strip()
+        retrieved_text = retrieved_entry.contexts.contexts[0].text.strip()
     
-    logger.info(retrieved_text)
+    logger.info(f"Retrieved text: {retrieved_text}")
     
     system_instruction = f"""
     You are a helpful and knowledgeable Cantonese language tutor specializing in vocabulary from the HSK exam. Your task is to assist learners by providing example sentences for given vocabulary words (词语). For each input word, you will output one sentence: A sentence in Cantonese Chinese (not standard written Chinese) using the same word, also demonstrating its usage within a clear and meaningful context. It is crucial to use Cantonese for this sentence, reflecting natural spoken Cantonese.
@@ -117,29 +117,58 @@ def generate_cantonese_sentence(rag_model, vocabulary_word):
 
     Guidelines:
     - Do not repeat the prompt input in your response.
-    - Refer to the retrieved entry from wordshk-dictionary: {retrieved_text}
-    
+    - Refer to the retrieved entry from wordshk-dictionary: 
+    {retrieved_text}
     and check the following: 
-    a. if the word doesn't have an entry, i.e., doesn't have an integer and pronunciation and "pos:", e.g., "1662,躍躍欲試:joek3 joek3 juk6 si3,"(pos:語句)", don't generate a sentence and return nothing
+    a. if there is no retrieved entry or it is not the same word in the <Input>, don't generate a sentence and return nothing
     b. if the word has (label:書面語), do NOT generate a sentence using the input vocabulary word but INSTEAD use the synonym ("sim: <synonym>") OR use the yue sentence in the <eg> example sentences OR a similar word in the "yue:" dictionary definition.
-    c. If the word has an entry, use the traditional script.
+    c. If the word has an entry match, generate a sentence using the traditional script.
 
     Examples:
     Prompt: 出路
+    Retrieved entry: 67817,出路:ceot1 lou6,"(pos:名詞)
+    <explanation>
+    yue:解決辦法（量詞：個／條）
+    eng:solution
+    <eg>
+    yue:而家市道唔好，我哋要為產品尋求新嘅出路。 (ji4 gaa1 si5 dou6 m4 hou2, ngo5 dei6 jiu3 wai6 caan2 ban2 cam4 kau4 san1 ge3 ceot1 lou6.)
+    eng:Now since the market is unfavourable, we must find new outlets for our products.
+    ----
+    <explanation>
+    yue:將來；前景；發展方向（量詞：個／條）
+    eng:future; way ahead; prospects
+    <eg>
+    yue:而家嘅大學生都好擔心自己嘅出路。 (ji4 gaa1 ge3 daai6 hok6 saang1 dou1 hou2 daam1 sam1 zi6 gei2 ge3 ceot1 lou6.)
+    eng:Nowadays, many university students worry about their future prospects.
+    ----
+    <explanation>
+    yue:離開一個地方嘅路（量詞：個／條）
+    eng:way out
+    <eg>
+    yue:我哋喺個迷宮度揾唔到出路呀。 (ngo5 dei6 hai2 go3 mai4 gung1 dou6 wan2 m4 dou2 ceot1 lou6 aa3.)
+    eng:We can't find a way out in the maze.",,OK,未公開
     Output: 而家嘅大學生都好擔心自己嘅出路。
-    Explanation: confirmed entry in the dictionary
     
     Prompt: 應聘
-    Output: <nothing>。
-    Explanation: word ntry is not in dictionary
-    
-    Prompt: 娛樂
-    Output: 我識鬼文學咩？娛樂就識啫。
-    Explanation: confirmed entry in the dictionary
+    Retrieved entry: 88550,徵聘:zing1 ping3,"(pos:動詞)(label:書面語)
+    <explanation>
+    yue:公開登廣告或者私底下請人做一份工
+    eng:to give public notice of vacancies to be filled; to invite applications for jobs
+    <eg>
+    yue:徵聘啓事
+    eng:job advertisement",,未經覆核，可能有錯漏 UNREVIEWED ENTRY - MAY CONTAIN ERRORS OR OMISSIONS,未公開
+    Output: 
 
     Prompt: 責備
+    Retrieved entry: 87223,責備:zaak3 bei6,"(pos:動詞)(label:書面語)(sim:斥責)(sim:責罵)
+    <explanation>
+    yue:做錯嘢俾人鬧
+    eng:to rebuke; to reprimand; to scold
+    <eg>
+    zho:做錯事被老師責備。 (zou6 co3 si6 bei6 lou5 si1 zaak3 bei6.)
+    yue:做錯嘢畀老師鬧。 (zou6 co3 je5 bei2 lou5 si1 naau6.)
+    eng:The teacher rebuked me for doing something wrong.",,未經覆核，可能有錯漏 UNREVIEWED ENTRY - MAY CONTAIN ERRORS OR OMISSIONS,未公開
     Output: 做錯嘢畀老師鬧。
-    Explanation: it is label:書面語 and so use the "sim: <synonym>" or "yue:" dictionary definition
     """
 
     prompt = f"{system_instruction}\n\nInput: {vocabulary_word}"
