@@ -16,4 +16,4 @@ def process_file(filename):
         file.writelines(processed_lines)
 
 # Process the file
-process_file('input.txt')
+process_file('input-staging.txt')

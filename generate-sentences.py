@@ -4,6 +4,8 @@ import vertexai
 import logging
 import os
 from dotenv import load_dotenv
+from anthropic import AnthropicVertex
+import re
 
 # Load environment variables
 load_dotenv()
@@ -50,7 +52,11 @@ def simplified_to_traditional(simplified_text):
     Output only the converted Traditional Chinese text, without any additional explanation or formatting.
     """
     try:
-        response = model.generate_content(prompt)
+        response = model.generate_content(
+            prompt,
+            generation_config=generation_config,
+            safety_settings=safety_settings,
+        )
         return response.text.strip()
     except Exception as e:
         logger.error(f"Error converting to Traditional Chinese: {e}")
@@ -92,95 +98,108 @@ def create_rag_retrieval_tool(corpus_name):
         logger.error(f"Error creating RAG retrieval tool: {e}")
         return None
 
-def generate_cantonese_sentence(rag_model, vocabulary_word):
-    # First get the dictionary entry
+def check_entry_details(retrieved_text: str, vocabulary_word: str) -> tuple[bool, str]:
+    """
+    Check if the retrieved entry matches the vocabulary word and determine entry type.
+    Returns (is_exact_match, entry_type) where entry_type can be:
+    - "exact": Exact character match found
+    - "similar": Entry appears to be semantically related
+    - "unrelated": Entry appears to be unrelated
+    """
+    if not retrieved_text:
+        return False, "unrelated"
+        
+    # Extract the entry word from the first line
+    match = re.match(r'^\d+,([^:]+):', retrieved_text)
+    if not match:
+        return False, "unrelated"
+        
+    entry_word = match.group(1)
+    if entry_word == vocabulary_word:
+        return True, "exact"
+    
+    # If not exact match, check if the entry appears related
+    # This is a heuristic - if the entry contains the vocabulary word in its definitions
+    # or examples, it might be semantically related
+    if vocabulary_word in retrieved_text:
+        return False, "similar"
+        
+    return False, "unrelated"
+
+def generate_cantonese_sentence(vocabulary_word, mandarin_model):
+    # First get the dictionary entry using existing Gemini RAG
     corpus_name = get_rag_corpus()
     retrieved_entry = perform_rag_retrieval(corpus_name, vocabulary_word)
-    
-    # logger.info(f"contexts {retrieved_entry}")
     
     # Format the retrieved entries for the prompt
     retrieved_text = ""
     if retrieved_entry and retrieved_entry.contexts.contexts:
-        # Take the first (most relevant) result
         retrieved_text = retrieved_entry.contexts.contexts[0].text.strip()
     
     logger.info(f"Retrieved text: {retrieved_text}")
     
-    system_instruction = f"""
-    You are a helpful and knowledgeable Cantonese language tutor specializing in vocabulary from the HSK exam. Your task is to assist learners by providing example sentences for given vocabulary words (词语). For each input word, you will output one sentence: A sentence in Cantonese Chinese (not standard written Chinese) using the same word, also demonstrating its usage within a clear and meaningful context. It is crucial to use Cantonese for this sentence, reflecting natural spoken Cantonese.
+    # Check entry match type
+    is_exact_match, entry_type = check_entry_details(retrieved_text, vocabulary_word)
+    
+    # Get Mandarin meaning if not exact match
+    mandarin_meaning = ""
+    if not is_exact_match:
+        try:
+            meaning_prompt = f"What is the core meaning of the word '{vocabulary_word}' in Mandarin? Give a brief 1-sentence definition."
+            meaning_response = mandarin_model.generate_content(
+                meaning_prompt,
+                generation_config={"temperature": 0.2},  # Low temperature for consistent definition
+                safety_settings=safety_settings,
+            )
+            mandarin_meaning = meaning_response.text.strip()
+            logger.info(f"Mandarin meaning: {mandarin_meaning}")
+        except Exception as e:
+            logger.error(f"Error getting Mandarin meaning: {e}")
+    
+    # Initialize Vertex AI Claude client
+    client = AnthropicVertex(
+        region="us-east5",
+        project_id=PROJECT_ID
+    )
+    
+    system_instruction = f"""You are a natural Cantonese language generator specializing in authentic Hong Kong Cantonese usage. Your task is to generate sentences that preserve the essential meaning and typical usage context of Mandarin words.
 
-    Follow the format below for your responses:
+    Entry Type: {"Exact match" if is_exact_match else "No exact match"}
+    {f'Mandarin Definition: {mandarin_meaning}' if not is_exact_match else ''}
 
-    Input: [Traditional Chinese vocabulary word]
-    Output: [Cantonese sentence]
+    Process for Sentence Generation:
+    1. For exact matches: Use the Words.HK entry as your guide
+    2. For non-exact matches:
+    - Understand how and when the Mandarin word is typically used
+    - Choose a Cantonese word/phrase that Hong Kong people would naturally use in the same situation
+    - Create a scenario that shows this natural usage
 
     Guidelines:
-    - Do not repeat the prompt input in your response.
-    - Refer to the retrieved entry from wordshk-dictionary: 
+    - Focus on how Hong Kong Cantonese speakers would express the same idea in daily life
+    - Keep the same level of formality and social context as the Mandarin usage
+    - Ensure the sentence reflects a situation where this meaning would naturally occur
+
+    Retrieved Dictionary Entry:
     {retrieved_text}
-    and check the following: 
-    a. if there is no retrieved entry or it is not the same word in the <Input>, don't generate a sentence and return nothing
-    b. if the word has (label:書面語), do NOT generate a sentence using the input vocabulary word but INSTEAD use the synonym ("sim: <synonym>") OR use the yue sentence in the <eg> example sentences OR a similar word in the "yue:" dictionary definition.
-    c. If the word has an entry match, generate a sentence using the traditional script.
 
-    Examples:
-    Prompt: 出路
-    Retrieved entry: 67817,出路:ceot1 lou6,"(pos:名詞)
-    <explanation>
-    yue:解決辦法（量詞：個／條）
-    eng:solution
-    <eg>
-    yue:而家市道唔好，我哋要為產品尋求新嘅出路。 (ji4 gaa1 si5 dou6 m4 hou2, ngo5 dei6 jiu3 wai6 caan2 ban2 cam4 kau4 san1 ge3 ceot1 lou6.)
-    eng:Now since the market is unfavourable, we must find new outlets for our products.
-    ----
-    <explanation>
-    yue:將來；前景；發展方向（量詞：個／條）
-    eng:future; way ahead; prospects
-    <eg>
-    yue:而家嘅大學生都好擔心自己嘅出路。 (ji4 gaa1 ge3 daai6 hok6 saang1 dou1 hou2 daam1 sam1 zi6 gei2 ge3 ceot1 lou6.)
-    eng:Nowadays, many university students worry about their future prospects.
-    ----
-    <explanation>
-    yue:離開一個地方嘅路（量詞：個／條）
-    eng:way out
-    <eg>
-    yue:我哋喺個迷宮度揾唔到出路呀。 (ngo5 dei6 hai2 go3 mai4 gung1 dou6 wan2 m4 dou2 ceot1 lou6 aa3.)
-    eng:We can't find a way out in the maze.",,OK,未公開
-    Output: 而家嘅大學生都好擔心自己嘅出路。
-    
-    Prompt: 應聘
-    Retrieved entry: 88550,徵聘:zing1 ping3,"(pos:動詞)(label:書面語)
-    <explanation>
-    yue:公開登廣告或者私底下請人做一份工
-    eng:to give public notice of vacancies to be filled; to invite applications for jobs
-    <eg>
-    yue:徵聘啓事
-    eng:job advertisement",,未經覆核，可能有錯漏 UNREVIEWED ENTRY - MAY CONTAIN ERRORS OR OMISSIONS,未公開
-    Output: 
+    IMPORTANT: Output ONLY the Cantonese sentence with NO additional text - no jyutping, no translation, no explanation."""
 
-    Prompt: 責備
-    Retrieved entry: 87223,責備:zaak3 bei6,"(pos:動詞)(label:書面語)(sim:斥責)(sim:責罵)
-    <explanation>
-    yue:做錯嘢俾人鬧
-    eng:to rebuke; to reprimand; to scold
-    <eg>
-    zho:做錯事被老師責備。 (zou6 co3 si6 bei6 lou5 si1 zaak3 bei6.)
-    yue:做錯嘢畀老師鬧。 (zou6 co3 je5 bei2 lou5 si1 naau6.)
-    eng:The teacher rebuked me for doing something wrong.",,未經覆核，可能有錯漏 UNREVIEWED ENTRY - MAY CONTAIN ERRORS OR OMISSIONS,未公開
-    Output: 做錯嘢畀老師鬧。
-    """
-
-    prompt = f"{system_instruction}\n\nInput: {vocabulary_word}"
     try:
-        response = rag_model.generate_content(
-            prompt,
-            generation_config=generation_config,
-            safety_settings=safety_settings,
+        response = client.messages.create(
+            model="claude-3-5-sonnet-v2@20241022",
+            max_tokens=100,
+            temperature=0.7,
+            messages=[
+                {
+                    "role": "user",
+                    "content": f"Input: {vocabulary_word}\nGenerate ONLY a single Cantonese sentence."
+                }
+            ],
+            system=system_instruction
         )
-        return response.text.strip()
+        return response.content[0].text.strip()
     except Exception as e:
-        logger.error(f"Error generating Cantonese sentence: {e}")
+        logger.error(f"Error generating Cantonese sentence with Claude: {e}")
         return None
 
 def generate_mandarin_sentence(model, vocabulary_word):
@@ -228,16 +247,8 @@ def process_vocabulary_words(input_file, output_file):
     # Log the corpus details
     corpus = rag.get_corpus(name=corpus_name)
     logger.info(f"Using RAG corpus: {corpus}")
-
-    # Create RAG retrieval tool
-    rag_retrieval_tool = create_rag_retrieval_tool(corpus_name)
     
-    # Initialize GenerativeModel with RAG retrieval tool if available
-    model_kwargs = {"model_name": "gemini-1.5-flash-001"}
-    if rag_retrieval_tool:
-        model_kwargs["tools"] = [rag_retrieval_tool]
-    
-    rag_model = GenerativeModel(**model_kwargs)
+    # Initialize Gemini model for Mandarin sentences
     mandarin_model = GenerativeModel("gemini-1.5-flash-001")
 
     with open(input_file, 'r', encoding='utf-8') as infile, open(output_file, 'w', encoding='utf-8') as outfile:
@@ -249,11 +260,11 @@ def process_vocabulary_words(input_file, output_file):
             traditional_word = simplified_to_traditional(vocabulary_word)
             logger.info(f"Processing: '{vocabulary_word}' ({traditional_word})")
 
-            # Generate Mandarin sentence
+            # Generate Mandarin sentence using Gemini
             mandarin_sentence = generate_mandarin_sentence(mandarin_model, vocabulary_word)
 
-            # Generate Cantonese sentence
-            cantonese_sentence = generate_cantonese_sentence(rag_model, traditional_word)
+            # Generate Cantonese sentence using Claude on Vertex AI
+            cantonese_sentence = generate_cantonese_sentence(traditional_word, mandarin_model)
 
             if mandarin_sentence and cantonese_sentence:
                 output_line = f"{vocabulary_word}\t{mandarin_sentence}<br><br>{cantonese_sentence}\n"
