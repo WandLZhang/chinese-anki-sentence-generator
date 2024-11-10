@@ -140,6 +140,7 @@ def generate_cantonese_sentence(vocabulary_word, mandarin_model):
     
     # Check entry match type
     is_exact_match, entry_type = check_entry_details(retrieved_text, vocabulary_word)
+    logger.info(f"Exact match: {is_exact_match}")
     
     # Get Mandarin meaning if not exact match
     mandarin_meaning = ""
