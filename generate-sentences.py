@@ -14,6 +14,11 @@ load_dotenv()
 PROJECT_ID = os.getenv('VERTEX_PROJECT_ID')
 LOCATION = "us-central1"
 
+client = AnthropicVertex(
+    region="us-east5",
+    project_id=PROJECT_ID
+)
+
 # Set up logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -119,37 +124,90 @@ def check_entry_details(retrieved_text: str, vocabulary_word: str) -> tuple[bool
         return True, "exact"
     
     # If not exact match, check if the entry appears related
-    # This is a heuristic - if the entry contains the vocabulary word in its definitions
-    # or examples, it might be semantically related
     if vocabulary_word in retrieved_text:
         return False, "similar"
         
     return False, "unrelated"
 
+def check_entry_formality(entry_text: str) -> tuple[bool, list[str]]:
+    """
+    Check if the entry is marked as formal/written Chinese and extract alternatives.
+    Returns (is_formal, alternative_words)
+    """
+    is_formal = False
+    alternatives = []
+    
+    # Check various formality markers
+    if any(marker in entry_text for marker in [
+        "(label:書面語)",
+        "(label:大陸)",
+        "!!!formal"
+    ]):
+        is_formal = True
+    
+    # Extract synonyms if available
+    sim_matches = re.findall(r'\(sim:([^)]+)\)', entry_text)
+    alternatives.extend(sim_matches)
+    
+    # Extract words from Cantonese example sentences
+    yue_matches = re.findall(r'yue:([^\n]+)', entry_text)
+    for match in yue_matches:
+        # Extract words that aren't punctuation or function words
+        words = re.findall(r'[\u4e00-\u9fff]+', match)
+        alternatives.extend(words)
+    
+    return is_formal, alternatives
+
+def find_best_entry(contexts, vocabulary_word: str) -> tuple[str, bool, bool, list[str]]:
+    """
+    Find the best matching entry from all retrieved contexts.
+    Returns (best_entry_text, is_exact_match, is_formal, alternatives)
+    """
+    if not contexts:
+        return "", False, False, []
+        
+    # First try to find an exact match in any context
+    for context in contexts:
+        text = context.text.strip()
+        is_exact, _ = check_entry_details(text, vocabulary_word)
+        if is_exact:
+            is_formal, alternatives = check_entry_formality(text)
+            return text, True, is_formal, alternatives
+            
+    # If no exact match found, return first context
+    text = contexts[0].text.strip()
+    is_formal, alternatives = check_entry_formality(text)
+    return text, False, is_formal, alternatives
+
 def generate_cantonese_sentence(vocabulary_word, mandarin_model):
-    # First get the dictionary entry using existing Gemini RAG
     corpus_name = get_rag_corpus()
     retrieved_entry = perform_rag_retrieval(corpus_name, vocabulary_word)
     
-    # Format the retrieved entries for the prompt
+    # Find best matching entry and check formality
     retrieved_text = ""
+    is_exact_match = False
+    is_formal = False
+    alternatives = []
+    
     if retrieved_entry and retrieved_entry.contexts.contexts:
-        retrieved_text = retrieved_entry.contexts.contexts[0].text.strip()
+        retrieved_text, is_exact_match, is_formal, alternatives = find_best_entry(
+            retrieved_entry.contexts.contexts, 
+            vocabulary_word
+        )
     
     logger.info(f"Retrieved text: {retrieved_text}")
+    logger.info(f"Is exact match: {is_exact_match}")
+    logger.info(f"Is formal: {is_formal}")
+    logger.info(f"Alternatives: {alternatives}")
     
-    # Check entry match type
-    is_exact_match, entry_type = check_entry_details(retrieved_text, vocabulary_word)
-    logger.info(f"Exact match: {is_exact_match}")
-    
-    # Get Mandarin meaning if not exact match
+    # Get Mandarin meaning if needed
     mandarin_meaning = ""
-    if not is_exact_match:
+    if not is_exact_match or is_formal:
         try:
             meaning_prompt = f"What is the core meaning of the word '{vocabulary_word}' in Mandarin? Give a brief 1-sentence definition."
             meaning_response = mandarin_model.generate_content(
                 meaning_prompt,
-                generation_config={"temperature": 0.2},  # Low temperature for consistent definition
+                generation_config={"temperature": 0.2},
                 safety_settings=safety_settings,
             )
             mandarin_meaning = meaning_response.text.strip()
@@ -157,23 +215,21 @@ def generate_cantonese_sentence(vocabulary_word, mandarin_model):
         except Exception as e:
             logger.error(f"Error getting Mandarin meaning: {e}")
     
-    # Initialize Vertex AI Claude client
-    client = AnthropicVertex(
-        region="us-east5",
-        project_id=PROJECT_ID
-    )
-    
     system_instruction = f"""You are a natural Cantonese language generator specializing in authentic Hong Kong Cantonese usage. Your task is to generate sentences that preserve the essential meaning and typical usage context of Mandarin words.
 
     Entry Type: {"Exact match" if is_exact_match else "No exact match"}
-    {f'Mandarin Definition: {mandarin_meaning}' if not is_exact_match else ''}
+    Entry Formality: {"Formal/Written" if is_formal else "Colloquial"}
+    {f'Mandarin Definition: {mandarin_meaning}' if mandarin_meaning else ''}
 
     Process for Sentence Generation:
-    1. For exact matches: Use the Words.HK entry as your guide
-    2. For non-exact matches:
-    - Understand how and when the Mandarin word is typically used
-    - Choose a Cantonese word/phrase that Hong Kong people would naturally use in the same situation
-    - Create a scenario that shows this natural usage
+    1. For formal/written entries (marked as 書面語, 大陸, or !!!formal):
+    - DO NOT use the formal word in your sentence
+    - Instead use these colloquial alternatives: {', '.join(alternatives) if alternatives else 'common spoken Cantonese expressions'}
+    - Focus on natural spoken Cantonese that expresses the same meaning
+
+    2. For colloquial entries:
+    - Use the Words.HK entry as your guide
+    - Ensure the usage matches typical Hong Kong speech
 
     Guidelines:
     - Focus on how Hong Kong Cantonese speakers would express the same idea in daily life
