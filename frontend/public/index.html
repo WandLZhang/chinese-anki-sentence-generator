@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chinese Anki Sentence Generator</title>
+    <link href="styles.css" rel="stylesheet">
+    <!-- Add Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
+    <script>
+        // Your web app's Firebase configuration
+        // For Firebase JS SDK v7.20.0 and later, measurementId is optional
+        const firebaseConfig = {
+          apiKey: "AIzaSyDhC0bs9z-2Nt4bkyXvEBXIG0K3_8dX9Dg",
+          authDomain: "wz-data-catalog-demo.firebaseapp.com",
+          projectId: "wz-data-catalog-demo",
+          storageBucket: "wz-data-catalog-demo.firebasestorage.app",
+          messagingSenderId: "48359809577",
+          appId: "1:48359809577:web:08d3a3b785c79d4d53b238",
+          measurementId: "G-Y9PPW4KJCD"
+        };
+      
+        // Initialize Firebase
+        const app = firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+        const firestore = firebase.firestore();
+
+        // Set up authentication state observer
+        auth.onAuthStateChanged((user) => {
+            if (user) {
+                if (user.email === 'wzhybrid@gmail.com') {
+                    document.getElementById('container').style.display = 'block';
+                } else {
+                    alert('Access denied. Only wzhybrid@gmail.com is allowed.');
+                    auth.signOut();
+                    document.getElementById('container').style.display = 'none';
+                }
+            } else {
+                document.getElementById('container').style.display = 'none';
+                // Sign in with Google
+                const provider = new firebase.auth.GoogleAuthProvider();
+                auth.signInWithPopup(provider).catch((error) => {
+                    console.error('Authentication error:', error);
+                });
+            }
+        });
+      </script>
+</head>
+<body>
+    <div id="container">
+        <div id="header">
+            <h1>Chinese Anki Sentence Generator</h1>
+        </div>
+        <div id="main">
+            <div id="vocab-section">
+                <h2>Vocabulary List</h2>
+                <textarea id="vocab-list" readonly></textarea>
+                <button id="download-btn">Download vocab.txt</button>
+            </div>
+            <div id="input-section">
+                <h2>Input Words</h2>
+                <div id="input-area">
+                    <input type="text" id="word-input" placeholder="Enter a word">
+                    <button id="add-word-btn">Add Word</button>
+                </div>
+                <div id="staged-words">
+                    <h3>Staged Words</h3>
+                    <ul id="staged-words-list"></ul>
+                </div>
+                <button id="generate-btn">Generate Sentences</button>
+            </div>
+        </div>
+    </div>
+    <script src="script.js"></script>
+</body>
+</html>
