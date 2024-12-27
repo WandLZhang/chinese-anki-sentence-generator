@@ -279,12 +279,13 @@ def generate_sentences(request):
         if not mandarin_sentence or not cantonese_sentence:
             return (jsonify({'error': 'Failed to generate sentences'}), 500, headers)
             
-        # Create document in Firestore
+        # Create document in Firestore with timestamp
         doc_ref = db.collection('vocabulary').document()
         doc_ref.set({
             'simplified': vocabulary_word,
             'mandarin': mandarin_sentence,
-            'cantonese': cantonese_sentence
+            'cantonese': cantonese_sentence,
+            'timestamp': firestore.SERVER_TIMESTAMP
         })
         
         return (jsonify({

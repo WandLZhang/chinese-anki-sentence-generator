@@ -9,19 +9,9 @@
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
+    <!-- Load Firebase config -->
+    <script src="config.js"></script>
     <script>
-        // Your web app's Firebase configuration
-        // For Firebase JS SDK v7.20.0 and later, measurementId is optional
-        const firebaseConfig = {
-          apiKey: "AIzaSyDhC0bs9z-2Nt4bkyXvEBXIG0K3_8dX9Dg",
-          authDomain: "wz-data-catalog-demo.firebaseapp.com",
-          projectId: "wz-data-catalog-demo",
-          storageBucket: "wz-data-catalog-demo.firebasestorage.app",
-          messagingSenderId: "48359809577",
-          appId: "1:48359809577:web:08d3a3b785c79d4d53b238",
-          measurementId: "G-Y9PPW4KJCD"
-        };
-      
         // Initialize Firebase
         const app = firebase.initializeApp(firebaseConfig);
         const auth = firebase.auth();
@@ -56,6 +46,11 @@
         <div id="main">
             <div id="vocab-section">
                 <h2>Vocabulary List</h2>
+                <div id="sort-preference">
+                    <label>New words appear:</label>
+                    <label><input type="radio" name="sort-order" value="top" checked> At the top</label>
+                    <label><input type="radio" name="sort-order" value="bottom"> At the bottom</label>
+                </div>
                 <textarea id="vocab-list" readonly></textarea>
                 <button id="download-btn">Download vocab.txt</button>
             </div>

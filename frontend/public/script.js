@@ -10,6 +10,23 @@ document.addEventListener('DOMContentLoaded', () => {
     let vocabCollection = null;
     let unsubscribe = null; // Store the unsubscribe function for the snapshot listener
 
+    // Load sort preference from localStorage
+    const sortPreference = document.querySelector('input[name="sort-order"]:checked');
+    let sortOrder = localStorage.getItem('sortOrder') || 'top';
+    document.querySelector(`input[name="sort-order"][value="${sortOrder}"]`).checked = true;
+
+    // Update sort preference when radio buttons change
+    document.querySelectorAll('input[name="sort-order"]').forEach(radio => {
+        radio.addEventListener('change', (e) => {
+            sortOrder = e.target.value;
+            localStorage.setItem('sortOrder', sortOrder);
+            // Refresh the display if we have data
+            if (vocabCollection) {
+                fetchVocab();
+            }
+        });
+    });
+
     auth.onAuthStateChanged(async (user) => {
         if (user && user.email === 'wzhybrid@gmail.com') {
             // Get Firestore instance
@@ -21,10 +38,42 @@ document.addEventListener('DOMContentLoaded', () => {
             // Set up real-time listener
             try {
                 unsubscribe = vocabCollection.onSnapshot(snapshot => {
-                    let vocabText = '';
+                    // Convert snapshot to array for sorting
+                    const entries = [];
                     snapshot.forEach(doc => {
+                        // Log document details for debugging
+                        console.log(`Document ${doc.id}:`, {
+                            word: doc.data().simplified,
+                            createTime: doc.createTime ? doc.createTime.toDate() : 'No createTime',
+                            updateTime: doc.updateTime ? doc.updateTime.toDate() : 'No updateTime'
+                        });
+                        
                         const data = doc.data();
-                        vocabText += `${data.simplified}\t${data.mandarin}<br><br>${data.cantonese}\n`;
+                        entries.push({
+                            ...data,
+                            id: doc.id,
+                            timestamp: data.timestamp ? data.timestamp.toMillis() : Date.now()
+                        });
+                    });
+
+                    // Sort entries based on timestamp
+                    entries.sort((a, b) => {
+                        return sortOrder === 'top' ? 
+                            b.timestamp - a.timestamp : 
+                            a.timestamp - b.timestamp;
+                    });
+
+                    // Log sorted entries for debugging
+                    console.log('Sorted entries:', entries.map(entry => ({
+                        id: entry.id,
+                        word: entry.simplified,
+                        timestamp: new Date(entry.timestamp)
+                    })));
+
+                    // Create text content
+                    let vocabText = '';
+                    entries.forEach(entry => {
+                        vocabText += `${entry.simplified}\t${entry.mandarin}<br><br>${entry.cantonese}\n`;
                     });
                     vocabList.value = vocabText;
                 }, error => {
@@ -54,10 +103,26 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         try {
             const snapshot = await vocabCollection.get();
-            let vocabText = '';
+            const entries = [];
             snapshot.forEach(doc => {
                 const data = doc.data();
-                vocabText += `${data.simplified}\t${data.mandarin}<br><br>${data.cantonese}\n`;
+                entries.push({
+                    ...data,
+                    timestamp: data.timestamp ? data.timestamp.toMillis() : Date.now()
+                });
+            });
+
+            // Sort entries based on timestamp
+            entries.sort((a, b) => {
+                return sortOrder === 'top' ? 
+                    b.timestamp - a.timestamp : 
+                    a.timestamp - b.timestamp;
+            });
+
+            // Create text content
+            let vocabText = '';
+            entries.forEach(entry => {
+                vocabText += `${entry.simplified}\t${entry.mandarin}<br><br>${entry.cantonese}\n`;
             });
             vocabList.value = vocabText;
         } catch (error) {
@@ -134,12 +199,28 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         try {
             const snapshot = await vocabCollection.get();
-            let vocabText = '';
+            const entries = [];
             snapshot.forEach(doc => {
                 const data = doc.data();
                 if (data.simplified && data.mandarin) { // Only include if there's actual content
-                    vocabText += `${data.simplified}\t${data.mandarin}<br><br>${data.cantonese}\n`;
+                    entries.push({
+                        ...data,
+                        timestamp: data.timestamp ? data.timestamp.toMillis() : Date.now()
+                    });
                 }
+            });
+
+            // Sort entries based on timestamp
+            entries.sort((a, b) => {
+                return sortOrder === 'top' ? 
+                    b.timestamp - a.timestamp : 
+                    a.timestamp - b.timestamp;
+            });
+
+            // Create text content
+            let vocabText = '';
+            entries.forEach(entry => {
+                vocabText += `${entry.simplified}\t${entry.mandarin}<br><br>${entry.cantonese}\n`;
             });
     
             // Add Anki configuration headers
