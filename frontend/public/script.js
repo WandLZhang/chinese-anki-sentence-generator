@@ -2,8 +2,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const vocabList = document.getElementById('vocab-list');
     const wordInput = document.getElementById('word-input');
     const addWordBtn = document.getElementById('add-word-btn');
-    const stagedWordsList = document.getElementById('staged-words-list');
-    const generateBtn = document.getElementById('generate-btn');
     const downloadBtn = document.getElementById('download-btn');
 
     // Wait for authentication before accessing Firestore
@@ -131,63 +129,43 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
-    // Function to add a word to the staged words list
-    const addWord = () => {
+    // Function to add a word and generate sentences
+    const addWord = async () => {
         const word = wordInput.value.trim();
-        if (word) {
-            const li = document.createElement('li');
-            li.textContent = word;
-            stagedWordsList.appendChild(li);
-            wordInput.value = '';
-        }
-    };
-
-    // Function to send staged words to the backend to generate sentences and update Firestore
-    const generateSentences = async () => {
+        if (!word) return;
+        
         if (!vocabCollection) {
-            alert('Please sign in with wzhybrid@gmail.com to generate sentences.');
+            alert('Please sign in with wzhybrid@gmail.com to add words.');
             return;
         }
-        const stagedWords = Array.from(stagedWordsList.children).map(li => li.textContent);
-        
-        generateBtn.disabled = true;
-        let successCount = 0;
-        let failCount = 0;
-        
-        for (const word of stagedWords) {
-            try {
-                const response = await fetch('https://us-central1-wz-data-catalog-demo.cloudfunctions.net/generate_sentences', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ word: word })
-                });
-                
-                if (response.ok) {
-                    successCount++;
-                    // Remove the processed word from the list
-                    const wordElement = Array.from(stagedWordsList.children).find(li => li.textContent === word);
-                    if (wordElement) {
-                        stagedWordsList.removeChild(wordElement);
-                    }
-                } else {
-                    failCount++;
-                    console.error(`Failed to generate sentences for word: ${word}`);
-                }
-                
-                // Add a small delay between requests to avoid overwhelming the service
-                await new Promise(resolve => setTimeout(resolve, 1000));
-            } catch (error) {
-                failCount++;
-                console.error(`Error generating sentences for word: ${word}:`, error);
+
+        // Disable input while processing
+        addWordBtn.disabled = true;
+        wordInput.disabled = true;
+
+        try {
+            const response = await fetch('https://us-central1-wz-data-catalog-demo.cloudfunctions.net/generate_sentences', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ word: word })
+            });
+            
+            if (!response.ok) {
+                throw new Error(`Failed to generate sentences for word: ${word}`);
             }
-        }
-        
-        generateBtn.disabled = false;
-        
-        if (failCount > 0) {
-            alert(`Completed with ${successCount} successes and ${failCount} failures. Check console for details.`);
+            
+            // Clear input on success
+            wordInput.value = '';
+            
+        } catch (error) {
+            console.error('Error:', error);
+            alert('Failed to process word. Check console for details.');
+        } finally {
+            // Re-enable input
+            addWordBtn.disabled = false;
+            wordInput.disabled = false;
         }
     };
 
@@ -242,6 +220,5 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Event listeners
     addWordBtn.addEventListener('click', addWord);
-    generateBtn.addEventListener('click', generateSentences);
     downloadBtn.addEventListener('click', downloadVocab);
 });
